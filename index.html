@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Contract Monitor</title>
+    <script src="https://accounts.google.com/gsi/client" defer></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --danger: #dc2626;
+            --danger-hover: #b91c1c;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --text: #0f172a;
+            --text-muted: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: var(--card-bg);
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+            border: 1px solid var(--border);
+        }
+
+        .logo-container {
+            margin-bottom: 24px;
+        }
+
+        .logo-icon {
+            width: 64px;
+            height: 64px;
+            background: #dbeafe;
+            color: var(--primary);
+            border-radius: 12px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 16px;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: var(--text-muted);
+            font-size: 14px;
+            margin-bottom: 32px;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .btn:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn:disabled {
+            opacity: 0.65;
+            cursor: not-allowed;
+        }
+
+        .dashboard {
+            display: none;
+            width: 100%;
+            max-width: 1000px;
+            background: var(--card-bg);
+            padding: 32px;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+            border: 1px solid var(--border);
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 24px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+        }
+
+        .logout-btn {
+            background-color: transparent;
+            color: var(--text-muted);
+            border: 1px solid var(--border);
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .logout-btn:hover {
+            background: #f1f5f9;
+            color: var(--text);
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .admin-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .input-field {
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .grid-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 8px;
+        }
+
+        .grid-table th, .grid-table td {
+            text-align: left;
+            padding: 12px;
+            border-bottom: 1px solid var(--border);
+            font-size: 14px;
+        }
+
+        .grid-table th {
+            background-color: #f8fafc;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-active { background: #dcfce7; color: #15803d; }
+        .badge-terminated { background: #fee2e2; color: #b91c1c; }
+
+        .action-btn {
+            background: transparent;
+            border: none;
+            color: var(--danger);
+            cursor: pointer;
+            font-weight: 500;
+        }
+
+        .action-btn:hover { text-decoration: underline; }
+        .add-user-btn { background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;}
+        .add-user-btn:hover { background: #047857; }
+    </style>
+</head>
+<body>
+
+    <!-- AUTH LAYOUT -->
+    <div id="login-panel" class="login-card">
+        <div class="logo-container">
+            <div class="logo-icon">🔒</div>
+            <h1>Contract-Safe</h1>
+            <p class="subtitle">Secure Contract Monitor Platform</p>
+        </div>
+        <button id="google-signin-btn" class="btn" onclick="handleGoogleSignIn()">
+            Sync with Google Gmail
+        </button>
+    </div>
+
+    <!-- MAIN APP DASHBOARD LAYOUT -->
+    <div id="dashboard-panel" class="dashboard">
+        <div class="dashboard-header">
+            <h2>Contract Hub</h2>
+            <div class="user-info">
+                <img id="user-avatar" class="avatar" src="" alt="User profile image">
+                <div>
+                    <div id="user-name" style="font-weight: 600;">Loading...</div>
+                    <div id="user-email" style="font-size: 12px; color: var(--text-muted);">Loading...</div>
+                </div>
+                <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
+            </div>
+        </div>
+
+        <div class="section-title">User Management Panel</div>
+        <div class="admin-controls">
+            <input type="text" id="new-username" class="input-field" placeholder="Username/Email">
+            <input type="text" id="new-userrole" class="input-field" placeholder="Role (e.g. Manager)">
+            <button class="add-user-btn" onclick="adminAddUser()">Add Account</button>
+            <button class="add-user-btn" style="background: #b91c1c; margin-left: 0;" onclick="resetApp()">Reset App</button>
+        </div>
+
+        <table class="grid-table">
+            <thead>
+                <tr>
+                    <th>User identity</th>
+                    <th>Permissions</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="user-list-body">
+                <tr id="user-row-1">
+                    <td>admin@contractsafe.com</td>
+                    <td>Owner / Root</td>
+                    <td><button class="action-btn" onclick="adminRemoveUser('user-row-1')">Revoke</button></td>
+                </tr>
+            </tbody>
+        </table>
+
+        <br><br>
+        <div class="section-title">Monitored Mailbox Streams</div>
+        <table class="grid-table">
+            <thead>
+                <tr>
+                    <th>Document Reference ID</th>
+                    <th>Associated Stream Context</th>
+                    <th>Status</th>
+                    <th>Management</th>
+                </tr>
+            </thead>
+            <tbody id="contract-list-body"></tbody>
+        </table>
+    </div>
+    <script>
+        const GOOGLE_CLIENT_ID = "63908778679-6au194quqcot09tom8ifgep7em9shtvq.apps.googleusercontent.com";
+        const ADMIN_USERNAME = "Lathan";
+        let ADMIN_PASSWORD = "Lat112011!";
+
+        let tokenClient;
+        let accessToken = null;
+
+        function initGoogleTokenClient() {
+            if (!window.google || !google.accounts || !google.accounts.oauth2) {
+                console.error("Google Identity client is not loaded yet.");
+                return;
+            }
+
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: GOOGLE_CLIENT_ID,
+                scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly',
+                callback: handleTokenResponse,
+            });
+            setSignInButtonState(false);
+        }
+
+        function setSignInButtonState(isLoading) {
+            const button = document.getElementById('google-signin-btn');
+            if (!button) return;
+            button.disabled = isLoading;
+            button.textContent = isLoading ? 'Loading Google sign-in…' : 'Sync with Google Gmail';
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            initGoogleTokenClient();
+            setSignInButtonState(true);
+        });
+
+        function handleGoogleSignIn() {
+            if (!tokenClient) {
+                initGoogleTokenClient();
+            }
+            if (!tokenClient) {
+                alert('Unable to initiate Google sign-in. Please refresh the page and try again.');
+                setSignInButtonState(false);
+                return;
+            }
+            setSignInButtonState(true);
+            tokenClient.requestAccessToken({ prompt: 'consent' });
+        }
+
+        function handleTokenResponse(response) {
+            if (response.error !== undefined) {
+                console.error("Auth Fail Engine Error Log:", response.error);
+                return;
+            }
+            accessToken = response.access_token;
+            document.getElementById("login-panel").style.display = "none";
+            document.getElementById("dashboard-panel").style.display = "block";
+            fetchProfileDetails();
+            fetchContractEmails();
+        }
+
+        function fetchProfileDetails() {
+            fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            })
+            .then(res => res.json())
+            .then(profile => {
+                document.getElementById("user-avatar").src = profile.picture || "https://via.placeholder.com/40";
+                document.getElementById("user-name").innerText = profile.name || "Active Identity";
+                document.getElementById("user-email").innerText = profile.email || "Unknown Access Row";
+            })
+            .catch(err => console.error("Identity Engine Sync Drop Fault:", err));
+        }
+
+        function fetchContractEmails() {
+            if (!accessToken) return;
+            const searchQuery = encodeURIComponent("subject:contract OR contract");
+            const gmailUrl = `https://www.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=8`;
+
+            fetch(gmailUrl, {
+                headers: { 'Authorization': `Bearer ${accessToken}` }
+            })
+            .then(res => res.json())
+            .then(data => {
+                const tbody = document.getElementById("contract-list-body");
+                tbody.innerHTML = "";
+
+                if (data.messages && data.messages.length > 0) {
+                    data.messages.forEach((msg) => {
+                        const rowId = `contract-row-${msg.id}`;
+                        const tr = document.createElement("tr");
+                        tr.id = rowId;
+                        tr.innerHTML = `
+                            <td>DOC-${msg.id.substring(0, 6).toUpperCase()}</td>
+                            <td>Synchronized Live Thread Context Reference ID: ${msg.id}</td>
+                            <td><span id="status-${msg.id}" class="badge badge-active">Active</span></td>
+                            <td><button class="action-btn" onclick="adminTerminateContract('${msg.id}')">Terminate</button></td>
+                        `;
+                        tbody.appendChild(tr);
+                    });
+                } else {
+                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No monitored contract documents located inside index framework logs.</td></tr>`;
+                }
+            })
+            .catch(err => console.error("Mailbox Pipeline Interface Crash Exception:", err));
+        }
+
+        function verifyAdminIdentity() {
+            const checkUser = prompt("Enter Administrative System Username:");
+            const checkPass = prompt("Enter Administrative System Password:");
+            if (checkUser === ADMIN_USERNAME && checkPass === ADMIN_PASSWORD) {
+                return true;
+            } else {
+                alert("Security Authorization Rejected: Invalid Username or Password.");
+                return false;
+            }
+        }
+
+        function adminAddUser() {
+            const usernameInput = document.getElementById("new-username");
+            const roleInput = document.getElementById("new-userrole");
+            if (!usernameInput.value || !roleInput.value) {
+                alert("Processing Error: All parameter assignment data fields must be populated.");
+                return;
+            }
+            if (!verifyAdminIdentity()) return;
+
+            const tbody = document.getElementById("user-list-body");
+            const uniqueId = "user-row-" + Date.now();
+            const tr = document.createElement("tr");
+            tr.id = uniqueId;
+            tr.innerHTML = `
+                <td>${usernameInput.value}</td>
+                <td>${roleInput.value}</td>
+                <td><button class="action-btn" onclick="adminRemoveUser('${uniqueId}')">Revoke</button></td>
+            `;
+            tbody.appendChild(tr);
+            usernameInput.value = "";
+            roleInput.value = "";
+            alert("Account added successfully.");
+        }
+
+        function adminRemoveUser(elementId) {
+            if (!verifyAdminIdentity()) return;
+            const userRow = document.getElementById(elementId);
+            if (userRow) {
+                userRow.remove();
+                alert("User entry successfully deleted from directory layout.");
+            }
+        }
+
+        function resetApp() {
+            if (!verifyAdminIdentity()) return;
+
+            const newPassword = prompt("Enter a new administrator password:");
+            if (!newPassword) {
+                alert("Reset cancelled: password update is required.");
+                return;
+            }
+            const confirmPassword = prompt("Confirm the new administrator password:");
+            if (newPassword !== confirmPassword) {
+                alert("Password mismatch: reset aborted.");
+                return;
+            }
+
+            ADMIN_PASSWORD = newPassword;
+            const tbody = document.getElementById("contract-list-body");
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">All monitored contracts have been cleared. The contract stream has been reset.</td></tr>`;
+
+            alert("App reset complete and admin password updated.");
+        }
+        
+        function adminTerminateContract(messageId) {
+            if (!verifyAdminIdentity()) return;
+            const statusBadge = document.getElementById(`status-${messageId}`);
+            const contractRow = document.getElementById(`contract-row-${messageId}`);
+
+            if (statusBadge) {
+                statusBadge.className = "badge badge-terminated";
+                statusBadge.innerText = "Terminated";
+            }
+            if (contractRow) {
+                contractRow.style.opacity = "0.35";
+                contractRow.style.backgroundColor = "#fff1f2";
+                contractRow.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+                setTimeout(() => {
+                    contractRow.remove();
+                }, 3000);
+            }
+        }
+
+        function handleLogout() {
+            accessToken = null;
+            document.getElementById("dashboard-panel").style.display = "none";
+            document.getElementById("login-panel").style.display = "block";
+            alert("Session completely dropped. Terminal interface locked.");
+        }
+    </script>
+</body>
+</html>
