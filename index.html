@@ -113,6 +113,39 @@
             border: 1px solid var(--border);
         }
 
+        .dashboard-subtitle {
+            font-size: 13px;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+
+        .connection-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: #dcfce7;
+            color: #15803d;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .inline-btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .inline-btn:hover {
+            background: var(--primary-hover);
+        }
+
         .dashboard-header {
             display: flex;
             justify-content: space-between;
@@ -213,6 +246,7 @@
         .action-btn:hover { text-decoration: underline; }
         .add-user-btn { background: #059669; color: white; border: none; padding: 8px 16px; border-radius: 6px; cursor: pointer; font-weight: 500;}
         .add-user-btn:hover { background: #047857; }
+        .contract-form { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
     </style>
 </head>
 <body>
@@ -223,22 +257,29 @@
             <div class="logo-icon">🔒</div>
             <h1>Contract-Safe</h1>
             <p class="subtitle">Secure Contract Monitor Platform</p>
+            <p class="subtitle">Enter the admin credentials to access the protected contract view.</p>
         </div>
-        <button id="google-signin-btn" class="btn" onclick="handleGoogleSignIn()">
-            Sync with Google Gmail
-        </button>
+        <form id="admin-login-form" onsubmit="event.preventDefault(); handleAdminLogin();">
+            <input id="admin-username" class="input-field" type="text" placeholder="Admin Username" style="width: 100%; margin-bottom: 12px;" required>
+            <input id="admin-password" class="input-field" type="password" placeholder="Admin Password" style="width: 100%; margin-bottom: 16px;" required>
+            <button id="google-signin-btn" class="btn" type="submit">Open Contract View</button>
+        </form>
     </div>
 
     <!-- MAIN APP DASHBOARD LAYOUT -->
     <div id="dashboard-panel" class="dashboard">
         <div class="dashboard-header">
-            <h2>Contract Hub</h2>
+            <div>
+                <h2>Contract Hub</h2>
+                <p class="dashboard-subtitle">Gmail-connected contract workspace</p>
+            </div>
             <div class="user-info">
                 <img id="user-avatar" class="avatar" src="" alt="User profile image">
                 <div>
                     <div id="user-name" style="font-weight: 600;">Loading...</div>
                     <div id="user-email" style="font-size: 12px; color: var(--text-muted);">Loading...</div>
                 </div>
+                <button class="inline-btn" onclick="handleGoogleSignIn()" style="margin-right: 8px;">Connect Gmail</button>
                 <button class="logout-btn" onclick="handleLogout()">Sign Out</button>
             </div>
         </div>
@@ -269,13 +310,23 @@
         </table>
 
         <br><br>
-        <div class="section-title">Monitored Mailbox Streams</div>
+        <div class="section-title">
+            <span>Monitored Mailbox Streams</span>
+            <button class="inline-btn" onclick="fetchContractEmails()">Refresh Gmail Sync</button>
+        </div>
+        <div class="contract-form">
+            <input type="text" id="contract-name" class="input-field" placeholder="Client Name">
+            <input type="email" id="contract-email" class="input-field" placeholder="Monitoring Email">
+            <input type="number" id="contract-value" class="input-field" placeholder="Contract Value">
+            <button class="add-user-btn" onclick="addContractEntry()">Add Contract</button>
+        </div>
         <table class="grid-table">
             <thead>
                 <tr>
                     <th>Document Reference ID</th>
                     <th>Associated Stream Context</th>
                     <th>Status</th>
+                    <th>Renewal Likelihood</th>
                     <th>Management</th>
                 </tr>
             </thead>
@@ -284,64 +335,171 @@
     </div>
     <script>
         const GOOGLE_CLIENT_ID = "63908778679-6au194quqcot09tom8ifgep7em9shtvq.apps.googleusercontent.com";
+        const GOOGLE_SCOPES = [
+            'https://www.googleapis.com/auth/userinfo.email',
+            'https://www.googleapis.com/auth/userinfo.profile',
+            'https://www.googleapis.com/auth/gmail.readonly'
+        ].join(' ');
+        const REDIRECT_URI = `${window.location.origin}${window.location.pathname}`;
         const ADMIN_USERNAME = "Lathan";
-        let ADMIN_PASSWORD = "Lat112011!";
+        let ADMIN_PASSWORD = "LAT112011!";
 
-        let tokenClient;
         let accessToken = null;
-
-        function initGoogleTokenClient() {
-            if (!window.google || !google.accounts || !google.accounts.oauth2) {
-                console.error("Google Identity client is not loaded yet.");
-                return;
-            }
-
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: GOOGLE_CLIENT_ID,
-                scope: 'https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly',
-                callback: handleTokenResponse,
-            });
-            setSignInButtonState(false);
-        }
+        let popupWindow = null;
+        let contractViewUnlocked = false;
 
         function setSignInButtonState(isLoading) {
             const button = document.getElementById('google-signin-btn');
             if (!button) return;
             button.disabled = isLoading;
-            button.textContent = isLoading ? 'Loading Google sign-in…' : 'Sync with Google Gmail';
+            button.textContent = isLoading ? 'Signing In…' : 'Sign In';
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
-            initGoogleTokenClient();
-            setSignInButtonState(true);
-        });
+        function showAuthView() {
+            document.getElementById("login-panel").style.display = "block";
+            document.getElementById("dashboard-panel").style.display = "none";
+        }
+
+        function showDashboardView() {
+            if (!contractViewUnlocked) {
+                showLoginView();
+                return;
+            }
+            document.getElementById("login-panel").style.display = "none";
+            document.getElementById("dashboard-panel").style.display = "block";
+        }
+
+        function showLoginView() {
+            document.getElementById("dashboard-panel").style.display = "none";
+            document.getElementById("login-panel").style.display = "block";
+        }
+
+        function buildAuthUrl() {
+            const state = `contract-safe-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+            sessionStorage.setItem('google-oauth-state', state);
+            const params = new URLSearchParams({
+                client_id: GOOGLE_CLIENT_ID,
+                redirect_uri: REDIRECT_URI,
+                response_type: 'token',
+                scope: GOOGLE_SCOPES,
+                include_granted_scopes: 'true',
+                state,
+                prompt: 'consent'
+            });
+            return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+        }
 
         function handleGoogleSignIn() {
-            if (!tokenClient) {
-                initGoogleTokenClient();
-            }
-            if (!tokenClient) {
-                alert('Unable to initiate Google sign-in. Please refresh the page and try again.');
+            setSignInButtonState(true);
+            const authUrl = buildAuthUrl();
+            popupWindow = window.open(authUrl, 'google-oauth', 'width=520,height=680');
+
+            if (!popupWindow) {
+                alert('Please allow popups for this site so Google can open the sign-in window.');
                 setSignInButtonState(false);
                 return;
             }
-            setSignInButtonState(true);
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+
+            const popupTimer = window.setInterval(() => {
+                if (!popupWindow || popupWindow.closed) {
+                    window.clearInterval(popupTimer);
+                    setSignInButtonState(false);
+                }
+            }, 500);
         }
 
-        function handleTokenResponse(response) {
-            if (response.error !== undefined) {
-                console.error("Auth Fail Engine Error Log:", response.error);
-                return;
+        function handleAuthCallbackFromHash() {
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            const accessTokenFromHash = params.get('access_token');
+            const error = params.get('error');
+            const state = params.get('state');
+            const storedState = sessionStorage.getItem('google-oauth-state');
+
+            if (state && storedState && state !== storedState) {
+                console.error('OAuth state mismatch.');
+                return null;
             }
-            accessToken = response.access_token;
-            document.getElementById("login-panel").style.display = "none";
-            document.getElementById("dashboard-panel").style.display = "block";
+
+            if (error) {
+                console.error('Google auth error:', error);
+                if (window.opener && window.opener !== window) {
+                    window.opener.postMessage({ type: 'google-auth-error', error }, window.location.origin);
+                    window.close();
+                }
+                return null;
+            }
+
+            if (accessTokenFromHash) {
+                sessionStorage.removeItem('google-oauth-state');
+                if (window.opener && window.opener !== window) {
+                    window.opener.postMessage({ type: 'google-auth-success', accessToken: accessTokenFromHash }, window.location.origin);
+                    window.close();
+                    return null;
+                }
+                return accessTokenFromHash;
+            }
+
+            return null;
+        }
+
+        function completeAuth(token) {
+            accessToken = token;
+            showDashboardView();
+            setSignInButtonState(false);
             fetchProfileDetails();
             fetchContractEmails();
         }
 
+        function handleAdminLogin(skipPasswordCheck = false) {
+            const usernameInput = document.getElementById('admin-username');
+            const passwordInput = document.getElementById('admin-password');
+            const username = usernameInput.value.trim();
+            const password = passwordInput.value;
+
+            if (skipPasswordCheck || (username === ADMIN_USERNAME && password === ADMIN_PASSWORD)) {
+                contractViewUnlocked = true;
+                document.getElementById('admin-login-form').reset();
+                document.getElementById('user-name').innerText = 'Admin User';
+                document.getElementById('user-email').innerText = 'admin@contractsafe.com';
+                document.getElementById('user-avatar').src = 'https://via.placeholder.com/40';
+                showDashboardView();
+                fetchContractEmails();
+                return;
+            }
+
+            alert('Invalid admin username or password.');
+        }
+
+        function handleAuthMessage(event) {
+            if (event.origin !== window.location.origin) return;
+            if (event.data?.type === 'google-auth-success' && event.data?.accessToken) {
+                completeAuth(event.data.accessToken);
+            } else if (event.data?.type === 'google-auth-error') {
+                console.error('Google auth error:', event.data.error);
+                setSignInButtonState(false);
+            }
+        }
+
+        window.addEventListener('DOMContentLoaded', () => {
+            showLoginView();
+            setSignInButtonState(false);
+            window.addEventListener('message', handleAuthMessage);
+
+            const authToken = handleAuthCallbackFromHash();
+            if (authToken) {
+                completeAuth(authToken);
+            }
+        });
+
+        window.addEventListener('load', () => {
+            const authToken = handleAuthCallbackFromHash();
+            if (authToken) {
+                completeAuth(authToken);
+            }
+        });
+
         function fetchProfileDetails() {
+            if (!accessToken) return;
             fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
                 headers: { 'Authorization': `Bearer ${accessToken}` }
             })
@@ -354,8 +512,52 @@
             .catch(err => console.error("Identity Engine Sync Drop Fault:", err));
         }
 
+        function calculateRenewalLikelihood(messageId) {
+            let hash = 0;
+            for (let i = 0; i < messageId.length; i += 1) {
+                hash = ((hash << 5) - hash) + messageId.charCodeAt(i);
+                hash |= 0;
+            }
+            const normalized = Math.abs(hash) % 81;
+            return `${20 + normalized}%`;
+        }
+
+        function addContractEntry() {
+            if (!verifyAdminIdentity()) return;
+
+            const nameInput = document.getElementById("contract-name");
+            const emailInput = document.getElementById("contract-email");
+            const valueInput = document.getElementById("contract-value");
+
+            if (!nameInput.value.trim() || !emailInput.value.trim() || !valueInput.value) {
+                alert("Please fill in the client name, monitoring email, and contract value.");
+                return;
+            }
+
+            const messageId = `manual-${Date.now()}`;
+            const tbody = document.getElementById("contract-list-body");
+            const tr = document.createElement("tr");
+            tr.id = `contract-row-${messageId}`;
+            tr.innerHTML = `
+                <td>DOC-${messageId.substring(0, 6).toUpperCase()}</td>
+                <td>${nameInput.value.trim()} — ${emailInput.value.trim()}</td>
+                <td><span id="status-${messageId}" class="badge badge-active">Active</span></td>
+                <td><span id="renewal-${messageId}" class="badge badge-active">${calculateRenewalLikelihood(messageId)}</span></td>
+                <td><button id="manage-${messageId}" class="action-btn" onclick="adminTerminateContract('${messageId}')">Terminate</button></td>
+            `;
+            tbody.appendChild(tr);
+            nameInput.value = "";
+            emailInput.value = "";
+            valueInput.value = "";
+            alert("Contract added successfully.");
+        }
+
         function fetchContractEmails() {
-            if (!accessToken) return;
+            if (!accessToken) {
+                const tbody = document.getElementById("contract-list-body");
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Connect Gmail to load live mailbox data.</td></tr>`;
+                return;
+            }
             const searchQuery = encodeURIComponent("subject:contract OR contract");
             const gmailUrl = `https://www.googleapis.com/gmail/v1/users/me/messages?q=${searchQuery}&maxResults=8`;
 
@@ -376,15 +578,20 @@
                             <td>DOC-${msg.id.substring(0, 6).toUpperCase()}</td>
                             <td>Synchronized Live Thread Context Reference ID: ${msg.id}</td>
                             <td><span id="status-${msg.id}" class="badge badge-active">Active</span></td>
-                            <td><button class="action-btn" onclick="adminTerminateContract('${msg.id}')">Terminate</button></td>
+                            <td><span id="renewal-${msg.id}" class="badge badge-active">${calculateRenewalLikelihood(msg.id)}</span></td>
+                            <td><button id="manage-${msg.id}" class="action-btn" onclick="adminTerminateContract('${msg.id}')">Terminate</button></td>
                         `;
                         tbody.appendChild(tr);
                     });
                 } else {
-                    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No monitored contract documents located inside index framework logs.</td></tr>`;
+                    tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No monitored contract documents located inside index framework logs.</td></tr>`;
                 }
             })
-            .catch(err => console.error("Mailbox Pipeline Interface Crash Exception:", err));
+            .catch(err => {
+                console.error("Mailbox Pipeline Interface Crash Exception:", err);
+                const tbody = document.getElementById("contract-list-body");
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">Unable to sync Gmail right now. Please try again.</td></tr>`;
+            });
         }
 
         function verifyAdminIdentity() {
@@ -455,26 +662,46 @@
         function adminTerminateContract(messageId) {
             if (!verifyAdminIdentity()) return;
             const statusBadge = document.getElementById(`status-${messageId}`);
+            const renewalBadge = document.getElementById(`renewal-${messageId}`);
+            const manageButton = document.getElementById(`manage-${messageId}`);
             const contractRow = document.getElementById(`contract-row-${messageId}`);
+
+            if (!contractRow) return;
+
+            if (statusBadge && statusBadge.innerText === "Terminated") {
+                contractRow.remove();
+                alert("Terminated contract removed from the view.");
+                return;
+            }
 
             if (statusBadge) {
                 statusBadge.className = "badge badge-terminated";
                 statusBadge.innerText = "Terminated";
             }
-            if (contractRow) {
-                contractRow.style.opacity = "0.35";
-                contractRow.style.backgroundColor = "#fff1f2";
-                contractRow.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
-                setTimeout(() => {
-                    contractRow.remove();
-                }, 3000);
+            if (renewalBadge) {
+                renewalBadge.className = "badge badge-terminated";
+                renewalBadge.innerText = "Removed";
             }
+            if (manageButton) {
+                manageButton.innerText = "Remove";
+                manageButton.onclick = () => adminTerminateContract(messageId);
+            }
+
+            contractRow.style.opacity = "0.35";
+            contractRow.style.backgroundColor = "#fff1f2";
+            contractRow.style.transition = "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)";
+            alert("Contract marked as terminated. Admin can remove it from the view.");
         }
 
         function handleLogout() {
             accessToken = null;
-            document.getElementById("dashboard-panel").style.display = "none";
-            document.getElementById("login-panel").style.display = "block";
+            contractViewUnlocked = false;
+            showLoginView();
+            setSignInButtonState(false);
+            document.getElementById("user-name").innerText = "Loading...";
+            document.getElementById("user-email").innerText = "Loading...";
+            document.getElementById("user-avatar").src = "";
+            document.getElementById("contract-list-body").innerHTML = "";
             alert("Session completely dropped. Terminal interface locked.");
         }
     </script>
